@@ -1,83 +1,53 @@
-
 # Symfony App - Docker Setup
 
-This is a basic Symfony application running with Docker and MySQL.  
-The setup is kept minimal for easy development use.
-
----
+Basic Symfony app running with Docker and MySQL.
 
 ## Prerequisites
 
-- Docker
-- Docker Compose
-- (Optional) PHP and Composer installed locally if you want to run commands without Docker.
-
----
+- Docker & Docker Compose
+- `make` (Install via: `sudo apt install make` on Ubuntu)
+- (Optional) PHP and Composer locally
 
 ## Installation
 
-### 1. Clone the repository
+1. **Clone the project**
+
+   ```bash
+   git clone <your-repo-url>
+   cd <your-project-folder>
+   ```
+
+2. **Configure environment**
+
+   Update `.env` or `.env.local`:
+
+   ```env
+   DATABASE_URL="mysql://root:root@db:3306/app"
+   ```
+
+3. **Start application**
+
+   ```bash
+   make build
+   make up
+   make install
+   ```
+
+4. **Access**
+
+   👉 `http://localhost:8000`
+
+## Running Tests
 
 ```bash
-git clone <your-repo-url>
-cd <your-project-folder>
+make test
 ```
-
-### 2. Copy or update the `.env` file
-
-Ensure your `.env` or `.env.local` contains the correct database URL:
-
-```dotenv
-DATABASE_URL="mysql://root:root@db:3306/app"
-```
-
-### 3. Build and start the containers
-
-```bash
-docker-compose up --build
-```
-
-### 4. Install Symfony dependencies
-
-In a new terminal window:
-
-```bash
-docker-compose exec <container_name> composer install
-```
-
-### 5. (Optional) Run database migrations
-
-If you have migrations ready, run:
-
-```bash
-docker-compose exec <container_name> php bin/console doctrine:migrations:migrate
-```
-
-### 6. Access the application
-
-Open your browser and visit:  
-👉 [http://localhost:8000](http://localhost:8000)
-
----
 
 ## Useful Commands
 
-- **Run Symfony console commands**:
-
-```bash
-docker-compose exec <container_name> php bin/console <command>
-```
-
-- **Run Composer inside container**:
-
-```bash
-docker-compose exec <container_name> composer <command>
-```
-
-- **Stop containers**:
-
-```bash
-docker-compose down
-```
-
----
+- **Start containers**: `make up`
+- **Stop containers**: `make down`
+- **Rebuild containers**: `make rebuild`
+- **Install PHP dependencies**: `make install`
+- **Run Symfony console commands**: `docker compose run --rm app php bin/console <command>`
+- **Run Composer inside container**: `docker compose run --rm app composer <command>`
