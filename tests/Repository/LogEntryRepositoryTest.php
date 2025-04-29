@@ -47,6 +47,8 @@ class LogEntryRepositoryTest extends KernelTestCase
     {
         parent::tearDown();
         $this->entityManager->close();
-        $this->entityManager = null; // Avoid memory leaks
+
+        // Avoid memory leaks
+        $this->entityManager = null;
     }
 }
