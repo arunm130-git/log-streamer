@@ -42,12 +42,3 @@ Basic Symfony app running with Docker and MySQL.
 ```bash
 make test
 ```
-
-## Useful Commands
-
-- **Start containers**: `make up`
-- **Stop containers**: `make down`
-- **Rebuild containers**: `make rebuild`
-- **Install PHP dependencies**: `make install`
-- **Run Symfony console commands**: `docker compose run --rm app php bin/console <command>`
-- **Run Composer inside container**: `docker compose run --rm app composer <command>`

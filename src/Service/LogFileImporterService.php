@@ -12,6 +12,7 @@ use RuntimeException;
 class LogFileImporterService implements LogFileImporterInterface
 {
     private const BATCH_SIZE = 200;
+    const INVALID_LOG_FILE_PATH = __DIR__ . '/../../var/invalid_logs.log';
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -51,45 +52,30 @@ class LogFileImporterService implements LogFileImporterInterface
 
         // Parse each line
         while (($line = fgets($handle)) !== false) {
+
             $this->processAndSaveLogEntry($line);
+
             $linesProcessed++;
-
-            if ($linesProcessed % self::BATCH_SIZE === 0) {
-                try {
-                    $this->entityManager->beginTransaction();
-
-                    // Flush the current batch to the database
-                    $this->entityManager->flush();
-                    $this->entityManager->clear();
-
-                    // After each batch, update the file pointer in storage
-                    $currentPointer = ftell($handle);
-
-                    if ($currentPointer === false) {
-                        throw new RuntimeException("Unable to get the current file pointer position.");
-                    }
-                    $this->filePointerManager->setFilePointer($filePath, $currentPointer);
-
-                    // Commit the transaction after the batch is processed
-                    $this->entityManager->commit();
-                } catch (\Exception $e) {
-
-                    // If an error occurs, rollback the transaction
-                    $this->entityManager->rollback();
-                    throw new RuntimeException("An error occurred while processing the batch: " . $e->getMessage());
-                }
-            }
 
             // Stop processing after the max allowed lines to ensure short runs
             if ($linesProcessed >= $maxLinesPerRun) {
                 break;
             }
+
+            // Process as batches
+            if ($linesProcessed % self::BATCH_SIZE === 0) {
+
+                // Handle transaction and file pointer update
+                $this->handleTransactionWithFilePointerUpdate($handle, $filePath);
+            }
+
+        }
+
+        if ($linesProcessed % self::BATCH_SIZE !== 0) {
+            $this->handleTransactionWithFilePointerUpdate($handle, $filePath);
         }
 
         fclose($handle);
-
-        $this->entityManager->flush();
-        $this->entityManager->clear();
 
         return $linesProcessed;
     }
@@ -117,7 +103,8 @@ class LogFileImporterService implements LogFileImporterInterface
             $timestamp = \DateTimeImmutable::createFromFormat('d/M/Y:H:i:s O', $timestampString);
 
             if (!$timestamp) {
-                throw new RuntimeException("Invalid timestamp format: " . $timestampString);
+                $this->logInvalidEntries($logEntry);
+                return;
             }
 
             $log = new LogEntry();
@@ -129,7 +116,84 @@ class LogFileImporterService implements LogFileImporterInterface
 
             $this->entityManager->persist($log);
         } else {
-            throw new RuntimeException("Failed to parse log entry: " . $logEntry);
+            $this->logInvalidEntries($logEntry);
+        }
+    }
+
+    /**
+     * Handles transaction, flushes, clears, updates the file pointer, and handles rollback on error.
+     *
+     * @param resource $handle The file handle.
+     * @param string $filePath The log file path.
+     *
+     * @throws RuntimeException If an error occurs during the transaction.
+     */
+    private function handleTransactionWithFilePointerUpdate($handle, string $filePath): void
+    {
+        try {
+            // Start a new transaction
+            $this->entityManager->beginTransaction();
+
+            // Flush the current batch to the database
+            $this->entityManager->flush();
+            $this->entityManager->clear();
+
+            // Fetch current file pointer and update
+            $this->updateFilePointer($handle, $filePath);
+
+            // Commit the transaction after the batch is processed
+            $this->entityManager->commit();
+        } catch (\Exception $e) {
+            // If an error occurs, rollback the transaction
+            $this->entityManager->rollback();
+            throw new RuntimeException("An error occurred while processing the batch: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Fetches the current file pointer and updates it in storage.
+     *
+     * @param resource $handle The file handle.
+     * @param string $filePath The log file path.
+     *
+     * @throws RuntimeException If the file pointer can't be fetched.
+     */
+    private function updateFilePointer($handle, string $filePath): void
+    {
+        // Fetch current file pointer
+        $filePointer = ftell($handle);
+
+        if ($filePointer === false) {
+            throw new RuntimeException("Unable to get the current file pointer position.");
+        }
+
+        // After each batch, update the file pointer in storage
+        $this->filePointerManager->setFilePointer($filePath, $filePointer);
+    }
+
+    private function logInvalidEntries(string $logEntry)
+    {
+        // Open the invalid log file in append mode
+        $fileHandle = fopen(self::INVALID_LOG_FILE_PATH, 'a');
+
+        if ($fileHandle === false) {
+
+            // If the file can't be opened, throw an exception
+            throw new RuntimeException("An error occurred while opening the invalid logs file.");
+        }
+
+        try {
+
+            // Write the invalid log entry to the file with a newline
+            fwrite($fileHandle, $logEntry . PHP_EOL);
+        } catch (\Exception $e) {
+
+            // Handle any other exception that might occur during writing
+            throw new RuntimeException("An error occurred while writing to the invalid logs file: " . $e->getMessage());
+        } finally {
+
+            // Ensure the file handle is closed after writing
+            fclose($fileHandle);
         }
     }
 }
