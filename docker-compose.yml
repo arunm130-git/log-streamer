@@ -7,8 +7,10 @@ services:
       - .:/app
     depends_on:
       - db
+      - redis
     environment:
       DATABASE_URL: "mysql://root:root@db:3306/log_streamer"
+      REDIS_URL: "redis://redis:6379"
 
   db:
     image: mysql:8.0
@@ -18,4 +20,17 @@ services:
     ports:
       - "3306:3306"
     volumes:
+      - mysql_data:/var/lib/mysql
       - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  mysql_data: # This volume will store the MySQL data
+  redis_data: # This volume will store the Redis data

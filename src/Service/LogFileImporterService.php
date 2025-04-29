@@ -11,11 +11,12 @@ use RuntimeException;
  */
 class LogFileImporterService implements LogFileImporterInterface
 {
-    private const BATCH_SIZE = 100;
+    private const BATCH_SIZE = 200;
 
-    public function __construct(private readonly EntityManagerInterface $entityManager)
-    {
-    }
+    public function __construct(
+        private readonly EntityManagerInterface $entityManager,
+        private readonly FilePointerManagerInterface $filePointerManager
+    ) {}
 
     /**
      * Imports log entries from the given file path.
@@ -28,23 +29,60 @@ class LogFileImporterService implements LogFileImporterInterface
     public function importLogs(string $filePath): int
     {
         $linesProcessed = 0;
+        $maxLinesPerRun = 10000;
+
+        // Retrieve the read file pointer (byte offset) of the log file
+        $filePointer = $this->filePointerManager->getFilePointer($filePath);
 
         if (!file_exists($filePath)) {
             throw new RuntimeException("The log file '$filePath' does not exist.");
         }
 
         $handle = fopen($filePath, 'r');
+
         if ($handle === false) {
             throw new RuntimeException("Unable to open the log file '$filePath'.");
         }
 
+        // Move the file pointer to the saved position using fseek
+        if ($filePointer > 0) {
+            fseek($handle, $filePointer);
+        }
+
+        // Parse each line
         while (($line = fgets($handle)) !== false) {
             $this->processAndSaveLogEntry($line);
             $linesProcessed++;
 
             if ($linesProcessed % self::BATCH_SIZE === 0) {
-                $this->entityManager->flush();
-                $this->entityManager->clear(LogEntry::class);
+                try {
+                    $this->entityManager->beginTransaction();
+
+                    // Flush the current batch to the database
+                    $this->entityManager->flush();
+                    $this->entityManager->clear();
+
+                    // After each batch, update the file pointer in storage
+                    $currentPointer = ftell($handle);
+
+                    if ($currentPointer === false) {
+                        throw new RuntimeException("Unable to get the current file pointer position.");
+                    }
+                    $this->filePointerManager->setFilePointer($filePath, $currentPointer);
+
+                    // Commit the transaction after the batch is processed
+                    $this->entityManager->commit();
+                } catch (\Exception $e) {
+
+                    // If an error occurs, rollback the transaction
+                    $this->entityManager->rollback();
+                    throw new RuntimeException("An error occurred while processing the batch: " . $e->getMessage());
+                }
+            }
+
+            // Stop processing after the max allowed lines to ensure short runs
+            if ($linesProcessed >= $maxLinesPerRun) {
+                break;
             }
         }
 
@@ -67,7 +105,7 @@ class LogFileImporterService implements LogFileImporterInterface
     {
         $logEntry = trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $logEntry));
 
-        $pattern = '/^(.*?) - - \[(.*?)\] "(.*?) (.*?) HTTP\/.*?" (\d{3})$/';
+        $pattern = '/^([A-Z0-9\-]+) - - \[([^\]]+)\] "([A-Z]+) ([^ ]+) HTTP\/[\d.]+" (\d{3})$/';
 
         if (preg_match($pattern, $logEntry, $matches)) {
             $serviceName = $matches[1];

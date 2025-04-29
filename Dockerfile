@@ -1,5 +1,4 @@
-# Dockerfile
-FROM php:8.2-cli
+FROM php:8.4-cli
 
 # Install necessary PHP extensions
 RUN apt-get update && apt-get install -y \
@@ -7,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     unzip \
     git \
+    supervisor \
     && docker-php-ext-install pdo pdo_mysql
 
 # Install Composer
@@ -21,8 +21,11 @@ COPY . .
 # Install Symfony dependencies
 RUN composer install
 
-# Expose port if needed (optional for internal use)
+# Copy Supervisor config file into the container
+COPY supervisor.conf /etc/supervisor/conf.d/symfony.conf
+
+# Expose port 8000 for Symfony server
 EXPOSE 8000
 
-# Default command (optional)
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+# Start Supervisor in the foreground (this will keep the container running)
+CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf"]

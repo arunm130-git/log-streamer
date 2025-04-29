@@ -19,13 +19,9 @@ stop:
 install:
 	docker compose run --rm app composer install
 
-db-create-test:
-	docker compose run --rm app php bin/console doctrine:schema:create --env=test
-
-db-drop-test:
-	docker compose run --rm app php bin/console doctrine:schema:drop --force --env=test
-
-test: db-drop-test db-create-test
+test:
+	docker compose run --rm app php bin/console doctrine:database:create --env=test --if-not-exists
+	docker compose run --rm app php bin/console doctrine:schema:update --force --env=test
 	docker compose run --rm app php bin/phpunit
 
 shell:

@@ -59,12 +59,8 @@ HELP);
             $io->title('Log File Import');
             $io->note("Processing log file: $logFile");
 
-            $io->progressStart();
-
             // Import logs using the service
             $linesProcessed = $this->logFileImporter->importLogs($logFile);
-
-            $io->progressFinish();
 
             $io->success("$linesProcessed log entries processed and imported successfully!");
 
