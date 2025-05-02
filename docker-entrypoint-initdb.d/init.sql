@@ -1,0 +1,2 @@
+CREATE DATABASE IF NOT EXISTS log_streamer;
+CREATE DATABASE IF NOT EXISTS log_streamer_test;
